@@ -7,7 +7,15 @@ vp.scene.background = BackgroundColor
 
 vp.canvas.get_selected().align = "left"
 
-# // Utils // 
+# // Utils //
+
+Colors = {
+    "Permisson": vp.vec(1, 0.34902, 0.34902),
+    "Electric blue": vp.vec(0.0352941, 0.537255, 0.811765),
+    "Br. yellowish green": vp.vec(0.643137, 0.741176, 0.278431),
+    "Baby blue": vp.vec(0.596078, 0.760784, 0.858824),
+    "Flint": vp.vec(0.411765, 0.4, 0.360784),
+}
 
 def FormatNumber(Number, Digits):
     String = str(round(Number, Digits))
@@ -59,7 +67,7 @@ class CFrame:
         elif isinstance(other, vp.vector):
             pos = MatrixMul(self.RotMatrix, [[other.x], [other.y], [other.z]])
             return vp.vec(pos[0][0], pos[1][0], pos[2][0])
-        
+
         raise Exception(f"Unknown operation \"mul\" on {type(self)} and {type(other)}")
 
     def __str__(self):
@@ -109,44 +117,29 @@ class CFrame:
                     RotMatrix[2][0], RotMatrix[2][1], RotMatrix[2][2])
 
     def Invert(self):
-        print("adfsdfasdfkghasdkjfhgads")
-
-#print(CFrame.AngleY(vp.pi/16))
-#print(CFrame.AngleY(vp.pi/4))
-#print(CFrame.AngleY(vp.pi/4) * CFrame.AngleY(vp.pi/4))
-#print(CFrame.AngleY(vp.pi/2))
-
-Matrix1 = [
-            [2, 0, 2],
-            [0, 2, 0],
-            [0, 0, 2],
-        ]
-
-Matrix2 = [
-            [0, 0, 0],
-            [3, 0, 3],
-            [3, 0, 0],
-        ]
-
-#print(MatrixMul(Matrix1, Matrix2))
+        raise Exception(f":Invert() has not yet been implemented")
 
 # // Constants
+
+FRICTION = 0.05 # Air resistance or something, not very physically acurate
 
 SIM_RATE = 240 # hz
 
 g = 9.81
 l = 2.5
 
-r = 0.5 # Distance from the seat to the center of mass of BEATRICE
+r = 0.3 # Distance from the seat to the center of mass of BEATRICE
 I = 10 # Moment of inertia of BEATRICE (need real mesurments)
 
-TAILLE_BEATRICE = vp.vec(0.2, 1.55, 0.35)
-MASSE_BEATRICE = 46.72
+SIZE_SWING = vp.vec(.5,.1,.9)
+
+SIZE_BEATRICE = vp.vec(0.2, 1.55, 0.35)
+MASS_BEATRICE = 46.72
 
 # Constants you SHALL NOT TOUCH
 
-BLOCK_OFF = -1/2 - TAILLE_BEATRICE.y/2
-art_l = I/MASSE_BEATRICE # Artificial length, of an equivalent point mass system
+BLOCK_OFF = -1/2 - SIZE_BEATRICE.y/2
+art_l = (I + MASS_BEATRICE*(r**2))/MASS_BEATRICE # TODO - r = 0 => art_l = 0??? - Artificial length, of an equivalent point mass system
 
 # // Coordinates
 
@@ -162,10 +155,15 @@ def P1_upt_func():
     Num = -g*(2*m1 + m2)*vp.sin(P1["x"]) - m2*g*vp.sin(P1["x"] - 2*P2["x"]) - 2*vp.sin(P1["x"] - P2["x"])*m2*((P2["v"]**2)*art_l + (P1["v"]**2)*l*vp.cos(P1["x"] - P2["x"]))
     Denum = l*(2*m1 + m2 - m2*vp.cos(2*P1["x"] - 2*P2["x"]))
     return Num/Denum
-    #P1["a"] = (-1/((l**2)*(m1 + m2))) * (m2*l*art_l*P2["a"]*vp.cos(P2["x"] - P1["x"]) - m2*l*art_l*P2["v"]*vp.sin(P2["x"] - P1["x"]) + (m1 + m2)*g*l*vp.sin(P1["x"]))
 
 def P1_pos_func():
-	return HingeCFrame * CFrame.AngleX(P1["x"]) * CFrame.new(0,-l,0)
+    add_l = SIZE_BEATRICE.x/2 + SIZE_SWING.y/2
+
+    RotCFrame = HingeCFrame * CFrame.AngleX(P1["x"])
+    PoleCFrame = RotCFrame * CFrame.new(0,-(l+add_l)/2,0)
+    CFrameBox(P1["obj"], RotCFrame * CFrame.new(0,-(l+add_l),0))
+    CFrameBox(P1["ExtraData"]["Poles"][0], PoleCFrame * CFrame.new(-SIZE_SWING.z/2 + .1, 0, 0))
+    CFrameBox(P1["ExtraData"]["Poles"][1], PoleCFrame * CFrame.new(SIZE_SWING.z/2 - .1, 0, 0))
 
 def P2_upt_func():
     m1 = P1["m"]
@@ -174,34 +172,47 @@ def P2_upt_func():
     Num = 2*vp.sin(P1["x"] - P2["x"])*((P1["v"]**2)*l*(m1 + m2) + g*(m1 + m2)*vp.cos(P1["x"]) + (P2["v"]**2)*art_l*m2*vp.cos(P1["x"] - P2["x"]))
     Denum = l*(2*m1 + m2 - m2*vp.cos(2*P1["x"] - 2*P2["x"]))
     return Num/Denum
-	#(-1/(m2*art_l^2)) * (m2*l*art_l*P1["a"]*math.cos(P2["x"] - P1["x"]) + m2*l*art_l*P1["v"]*math.sin(P2["x"] - P1["x"]) + m2*g*art_l*math.sin(P2["x"]))
 
 def P2_pos_func():
-	return P1_pos_func() * CFrame.AngleX(P2["x"] - P1["x"]) * CFrame.new(0,-r,0)
+    HumanCFrame = HingeCFrame * CFrame.AngleX(P1["x"]) * CFrame.new(0,-l,0) * CFrame.AngleX(P2["x"] - P1["x"]) * CFrame.new(0,-r,0)
+    CFrameBox(P2["obj"], HumanCFrame)
+    CFrameBox(P2["ExtraData"]["Face"], HumanCFrame * CFrame.new(0, -SIZE_BEATRICE.y/2 + 0.3/2 + 0.05/2, SIZE_BEATRICE.x/2 - .08/2 + 10**-3) * CFrame.AngleZ(vp.pi))
 
 #P2 = None
 
-obj1 = vp.box(color = vp.color.red, size = vp.vec(.5,.1,1))
-obj2 = vp.box(color = vp.color.yellow, size = TAILLE_BEATRICE) # texture = "test.png"
+add_l = SIZE_BEATRICE.x/2 + SIZE_SWING.y/2
+
+Swing = vp.box(color = Colors["Permisson"], size = SIZE_SWING)
+SwingPole1 = vp.box(color = Colors["Flint"], size = vp.vec(.1,l + add_l,.1))
+SwingPole2 = vp.box(color = Colors["Flint"], size = vp.vec(.1,l + add_l,.1))
+
+Hooman = vp.box(color = Colors["Br. yellowish green"], size = SIZE_BEATRICE)
+HoomanFace = vp.box(color = vp.color.white, size = vp.vec(.08,.3,.3), texture = "BeatriceEvil.png")
 
 P1 = {
     "a": 0,
     "v": 0,
     "x": 1,
     "m" : 20,
-    "obj": obj1,
+    "obj": Swing,
     "upd_func": P1_upt_func,
     "pos_func": P1_pos_func,
+    "ExtraData": {
+        "Poles": [SwingPole1, SwingPole2]
+    }
 }
 
 P2 = {
     "a": 0,
     "v": 0,
     "x": 0,
-    "m": MASSE_BEATRICE,
-    "obj": obj2,
+    "m": MASS_BEATRICE,
+    "obj": Hooman,
     "upd_func": P2_upt_func,
     "pos_func": P2_pos_func,
+    "ExtraData": {
+        "Face": HoomanFace
+    }
 }
 
 objs = [P1, P2]
@@ -225,12 +236,10 @@ TextLabel = vp.wtext(text="")
 # Loop variables
 sim_dt = 0
 dt = 1/SIM_RATE
-i = 0
+step = 0
 
 while Running:
-    i += 1
-
-    vp.rate(SIM_RATE)
+    step += 1
 
     start_tick = vp.clock()
 
@@ -242,30 +251,18 @@ while Running:
     # Apply the acceleration to velocity and position
     for i, v in enumerate(objs):
         v["a"] = Accelerations[i]
-        v["v"] += v["a"]*dt
+        v["v"] = v["v"]*(1 - (FRICTION/SIM_RATE)) + v["a"]*dt
         v["x"] += v["v"]*dt
 
     # Update the object's CFrames
     for i, v in enumerate(objs):
-        CFrameBox(v["obj"], v["pos_func"]())
+        v["pos_func"]()
 
-    """
-    angle_1 = P1["x"] - vp.pi/2 # -pi to have 0 at (1,0) on the unit circle
-    P1["obj"].pos = l*vp.vec(vp.cos(angle_1),vp.sin(angle_1),0)
-    P1["obj"].axis = vp.vec(vp.cos(angle_1 + vp.pi/2), vp.sin(angle_1 + vp.pi/2), 0) * P1["obj"].length
-
-    angle_2 = P2["x"] - vp.pi/2 # -pi to have 0 at (1,0) on the unit circle
-    P2["obj"].pos = (P1["obj"].pos + r*vp.vec(vp.cos(angle_2),r*vp.sin(angle_2),0) 
-        #+ r*vp.vec(vp.cos(angle_1 + vp.pi/2), vp.sin(angle_1 + vp.pi/2), 0)
-        #+ r*vp.vec(vp.cos(angle_2 + vp.pi/2), vp.sin(angle_2 + vp.pi/2), 0)
-    )
-    P2["obj"].axis = vp.vec(vp.cos(angle_2 + vp.pi/2), vp.sin(angle_2 + vp.pi/2), 0) * P2["obj"].length
-    """
-
+    vp.rate(SIM_RATE)
 
     #MiscAnimation()
 
-    t = i*dt
+    t = step*dt
 
     #PlotGraph(t)
 
