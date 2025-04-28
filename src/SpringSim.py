@@ -101,21 +101,21 @@ class CFrame:
                     vp.cos(rz), vp.sin(rz), 0, 
                     -vp.sin(rz), vp.cos(rz), 0, 
                     0, 0, 1)
-    
+
     @classmethod
     def fromVectors(self, x, y, z, XVector, YVector, ZVector):
         return self(x, y, z, 
                     XVector[0], YVector[0], ZVector[0], 
                     XVector[1], YVector[1], ZVector[1], 
                     XVector[2], YVector[2], ZVector[2])
-    
+
     @classmethod
     def fromMatrix(self, x, y, z, RotMatrix):
         return self(x, y, z,
                     RotMatrix[0][0], RotMatrix[0][1], RotMatrix[0][2], 
                     RotMatrix[1][0], RotMatrix[1][1], RotMatrix[1][2],  
                     RotMatrix[2][0], RotMatrix[2][1], RotMatrix[2][2])
-    
+
     @classmethod
     def lookAt(self, Origin, Target, UpVector):
 
@@ -353,32 +353,32 @@ vp.button(text = "<b>Exit</b>", pos = vp.scene.title_anchor, bind = Exit)
 
 TextLabel = vp.wtext(text="", pos = vp.scene.title_anchor)
 
-ArmLengthLabel = vp.wtext(text = "ArmLength: " + str(TargetArmLength))
+ArmLengthLabel = vp.wtext(text = "Longeur des bras: " + FormatNumber(TargetArmLength,2))
 
 def ArmLenght(event):
     global TargetArmLength
     TargetArmLength = event.value
-    ArmLengthLabel.text = "ArmLength: " + str(TargetArmLength)
+    ArmLengthLabel.text = "Longeur des bras: " + FormatNumber(TargetArmLength,2)
 
 vp.slider(bind = ArmLenght, max = 1, min = 0, step = 0.01, value = TargetArmLength)
 
-GravityLabel = vp.wtext(text = "Gravity: 1g")
+GravityLabel = vp.wtext(text = "Gravité: 1.0g")
 
 def GravityModifier(event):
     global g
     g = vp.vec(0,-9.81,0)*event.value
-    GravityLabel.text = "Gravity: " + str(event.value) + "g"
+    GravityLabel.text = "Gravité: " + FormatNumber(event.value,1) + "g"
 
 vp.slider(bind = GravityModifier, max = 3, min = 0, step = 0.1, value = 1)
 
-AirResistanceLabel = vp.wtext(text = "Air Resistance: " + str(AirResistance))
+AirResistanceLabel = vp.wtext(text = "Résistance de l'air: " + FormatNumber(AirResistance,0))
 
 def AirResistanceModifier(event):
     global AirResistance
     AirResistance = event.value
-    AirResistanceLabel.text = "Air Resistance: " + str(AirResistance)
+    AirResistanceLabel.text = "Résistance de l'air: " + FormatNumber(AirResistance,0)
 
-vp.slider(bind = AirResistanceModifier, max = 1000, min = 0, step = 1, value = AirResistance)
+vp.slider(bind = AirResistanceModifier, max = 2000, min = 0, step = 1, value = AirResistance)
 
 # Loop variables
 sim_dt = 0
