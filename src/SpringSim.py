@@ -5,7 +5,7 @@ import vpython as vp
 BackgroundColor = vp.vec(241/255,242/255,244/255)
 vp.scene.background = BackgroundColor
 
-vp.canvas.get_selected().align = "left"
+#vp.canvas.get_selected().align = "left"
 
 # // Utils //
 
@@ -115,28 +115,38 @@ class CFrame:
                     RotMatrix[0][0], RotMatrix[0][1], RotMatrix[0][2], 
                     RotMatrix[1][0], RotMatrix[1][1], RotMatrix[1][2],  
                     RotMatrix[2][0], RotMatrix[2][1], RotMatrix[2][2])
+    
+    @classmethod
+    def lookAt(self, Origin, Target, UpVector):
+
+        ZVector = vp.norm(Target - Origin)
+        XVector = vp.norm(vp.cross(ZVector, UpVector))
+        YVector = vp.cross(XVector, ZVector)
+
+        return self.fromVectors(Origin.x, Origin.y, Origin.z,
+                    [XVector.x, XVector.y, XVector.z], 
+                    [YVector.x, YVector.y, YVector.z],  
+                    [ZVector.x, ZVector.y, ZVector.z])
 
     def Invert(self):
         raise Exception(f":Invert() has not yet been implemented")
 
 # // Constants
 
-FRICTION = 0.01 # Air resistance
+g = vp.vec(0,-9.81,0)
+AirResistance = 50 # Air resistance
+TargetArmLength = .45
 
 K = 80000 # Spring constant links between objects
-DAMPNING = 80 # Spring dampning, to stabilize the simulation
+DAMPNING = 100 # Spring dampning, to stabilize the simulation
 
-# TODO - For some reason, the DAMPNING is slowing down the angular oscillations of the pendulum, why is that?
-
-SIM_RATE = 240 # hz
-
-g = vp.vec(0,-9.81,0)
+SIM_RATE = 240*4 # hz
 
 SWING_SIZE = vp.vec(.5,.1,.9)
 
 SWING_LENGTH = 2.5
 SWING_MASS = 5
-SWING_INERTIA = 5 # I around the center of mass? # SWING_MASS * SWING_LENGTH**2
+SWING_INERTIA = SWING_MASS * SWING_LENGTH**2 # I around the center of mass? idk TODO - sus
 
 BEATRICE_SIZE = vp.vec(0.2, 1.55, 0.35)
 
@@ -145,147 +155,95 @@ BEATRICE_INERTIA = 40 # Moment of inertia of BEATRICE (need real mesurments)
 BEATRICE_MASS = 46.72
 
 BEATRICE_ARM_OFFSET = -0.35
-SWING_ARM_ATTACHMENT = 0.4
-ARM_SPRING_K = 6000
+SWING_ARM_ATTACHMENT = 0.5
+ARM_SPRING_K = 2000
+ARM_SPRING_DAMPNING = 10
+
+# // Force functions
+
+# Calculates the force between two points, from 2 objects
+def CalculateSpringForceOnObjs(obj1, obj2, Attachment1Offset, Attachment2Offset, K, Dampning, RestLength):
+
+    # // Spring force
+
+    Attachment1Pos = (obj1["CFrame"] * Attachment1Offset).Position
+    Attachment2Pos = (obj2["CFrame"] * Attachment2Offset).Position
+
+    # Vector from 2 to 1
+    DistanceVector = Attachment1Pos - Attachment2Pos
+    UnitVector = vp.norm(DistanceVector)
+
+    # Force on attachment 1 (equal and opposite for attachment 2)
+    SpringForce = - K * (vp.mag(DistanceVector) - RestLength)*UnitVector
+
+    # // Dampning Forces
+
+    Attachment1Velocity = obj1["v"] -obj1["CFrame"].ZVector*vp.mag(Attachment1Offset.Position)*obj1["r_v"]
+    Attachment2Velocity = obj2["v"] -obj2["CFrame"].ZVector*vp.mag(Attachment2Offset.Position)*obj2["r_v"]
+
+    # Velocity of Attachment1 relative to Attachment2
+    VelocityVector = Attachment1Velocity - Attachment2Velocity
+    ProjVelocityVector = vp.proj(VelocityVector, DistanceVector)
+
+    # Force on attachment 1 (equal and opposite for attachment 2)
+    DampningForce = - ProjVelocityVector*Dampning
+
+    # // Applying the forces
+
+    Force = SpringForce + DampningForce
+
+    obj1["Forces"] += Force
+    obj2["Forces"] -= Force
+
+    obj1["MomentForces"] += vp.cross(obj1["CFrame"].Position - Attachment1Pos, Force)
+    obj2["MomentForces"] += vp.cross(obj2["CFrame"].Position - Attachment2Pos, -Force)
+
+def CalculateAirResistance(obj):
+    obj["Forces"] -= obj["v"]*AirResistance
+
+def CalculateGravity(obj):
+    obj["Forces"] += obj["m"]*g
 
 # // Coordinates
 
-TargetArmLength = .4
+add_l = BEATRICE_SIZE.x/2 + SWING_SIZE.y/2
 
 HingeCFrame = CFrame.new(0, 2, 0)
 
-def P1_force_func(self):
-
-    # Spring from hinge to swing
-
-    RotCFrame = CFrame.new(self["x"].x,self["x"].y,self["x"].z) * CFrame.AngleX(P1["r_x"])
-    PoleTopCFrame = RotCFrame * CFrame.new(0,(SWING_LENGTH+add_l),0)
-
-    DistanceVec = PoleTopCFrame.Position - HingeCFrame.Position
-    DistanceVecNorm = vp.norm(DistanceVec)
-
-    HingeForce = - vp.norm(DistanceVec)*(vp.mag(DistanceVec))*K # Attachment to the hinge
-
-    # Dampning for spring 1
-
-    Spring_V1 = vp.dot(self["v"], DistanceVecNorm)*DistanceVecNorm
-
-    # Spring from swing to Hooman
-
-    RotCFrame = CFrame.new(P2["x"].x,P2["x"].y,P2["x"].z) * CFrame.AngleX(P2["r_x"])
-    Attachment = RotCFrame * CFrame.new(0,(BEATRICE_ROT_OFFSET),0)
-
-    DistanceVec = Attachment.Position - P1["CFrame"].Position
-    DistanceVecNorm = vp.norm(DistanceVec)
-
-    SpringForce = + vp.norm(DistanceVec)*(vp.mag(DistanceVec))*K # Attachment to Hooman
-
-    # Dampning for spring 2
-
-    Spring_V2 = -vp.dot(self["v"] - P1["v"], DistanceVecNorm)*DistanceVecNorm
-
-    # Spring for the Hooman's arms
-
-    RotCFrame = CFrame.new(P2["x"].x,P2["x"].y,P2["x"].z) * CFrame.AngleX(P2["r_x"])
-    ArmAttachment = RotCFrame * CFrame.new(0,(BEATRICE_ARM_OFFSET),0)
-
-    DistanceVec = ArmAttachment.Position - (P1["CFrame"] * CFrame.new(0,SWING_ARM_ATTACHMENT,0)).Position
-    DistanceVecNorm = vp.norm(DistanceVec)
-
-    ArmForce = + vp.norm(DistanceVec)*(vp.mag(DistanceVec) - TargetArmLength)*ARM_SPRING_K
-
-    # --
-
-    Force = (
-        g * self["m"] 
-        + HingeForce
-        + SpringForce
-        + ArmForce
-        - self["v"]*vp.mag(self["v"])*FRICTION # Using v squared for more realistic drag
-        - Spring_V1*DAMPNING # Dampning in the direction of the spring
-        - Spring_V2*DAMPNING # Dampning in the direction of the spring
-    )
-
-    # τ = F x r
-    Tau = (
-        vp.cross(CFrame.AngleX(P1["r_x"]).YVector * SWING_LENGTH, HingeForce)
-        + vp.cross(CFrame.AngleX(P1["r_x"]).YVector * 0, SpringForce)
-        + vp.cross(CFrame.AngleX(P1["r_x"]).YVector * SWING_ARM_ATTACHMENT, ArmForce)
-    )
-
-    return Force, -Tau.x
-
-def P1_pos_func(self):
-    add_l = BEATRICE_SIZE.x/2 + SWING_SIZE.y/2
-    
-    RotCFrame = CFrame.new(self["x"].x,self["x"].y,self["x"].z) * CFrame.AngleX(P1["r_x"])
+def P1_pos_func():
+    RotCFrame = CFrame.new(P1["x"].x,P1["x"].y,P1["x"].z) * CFrame.AngleX(P1["r_x"])
     PoleCFrame = RotCFrame * CFrame.new(0,(SWING_LENGTH+add_l)/2,0)
 
-    self["CFrame"] = RotCFrame
+    P1["CFrame"] = RotCFrame
 
     CFrameBox(P1["obj"], RotCFrame)
     CFrameBox(P1["ExtraData"]["Poles"][0], PoleCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, 0))
     CFrameBox(P1["ExtraData"]["Poles"][1], PoleCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, 0))
 
-def P2_force_func(self):
+def P2_pos_func():
+    HumanCFrame = CFrame.new(P2["x"].x,P2["x"].y,P2["x"].z) * CFrame.AngleX(P2["r_x"])
 
-    # Spring from the swing to Hooman
-
-    RotCFrame = CFrame.new(self["x"].x,self["x"].y,self["x"].z) * CFrame.AngleX(P2["r_x"])
-    Attachment = RotCFrame * CFrame.new(0,(BEATRICE_ROT_OFFSET),0)
-
-    DistanceVec = Attachment.Position - P1["CFrame"].Position
-    DistanceVecNorm = vp.norm(DistanceVec)
-
-    SpringForce = - vp.norm(DistanceVec)*(vp.mag(DistanceVec))*K # Attachment to the swing
-
-    # Dampning for that spring
-
-    Spring_V = vp.dot(self["v"] - P1["v"], DistanceVecNorm)*DistanceVecNorm
-
-    # Spring for the Hooman's arms
-
-    RotCFrame = CFrame.new(self["x"].x,self["x"].y,self["x"].z) * CFrame.AngleX(P2["r_x"])
-    ArmAttachment = RotCFrame * CFrame.new(0,(BEATRICE_ARM_OFFSET),0)
-
-    DistanceVec = ArmAttachment.Position - (P1["CFrame"] * CFrame.new(0,SWING_ARM_ATTACHMENT,0)).Position
-    DistanceVecNorm = vp.norm(DistanceVec)
-
-    ArmForce = - vp.norm(DistanceVec)*(vp.mag(DistanceVec) - TargetArmLength)*ARM_SPRING_K
-
-    # Dampning of Hooman's arms
-
-
-    # --
-
-    Force = (
-        g * self["m"] 
-        + SpringForce
-        + ArmForce
-        - self["v"]*vp.mag(self["v"])*FRICTION # Using v squared for more realistic drag
-        - Spring_V*DAMPNING # Dampning in the direction of the spring
-    )
-
-    # τ = F x r
-    Tau = (
-        vp.cross(CFrame.AngleX(P2["r_x"]).YVector * BEATRICE_ROT_OFFSET, SpringForce)
-        + vp.cross(CFrame.AngleX(P2["r_x"]).YVector * BEATRICE_ARM_OFFSET, ArmForce)
-    )
-
-    return Force, -Tau.x
-
-
-def P2_pos_func(self):
-    HumanCFrame = CFrame.new(self["x"].x,self["x"].y,self["x"].z) * CFrame.AngleX(P2["r_x"])
-
-    self["CFrame"] = HumanCFrame
+    P2["CFrame"] = HumanCFrame
 
     CFrameBox(P2["obj"], HumanCFrame)
-    CFrameBox(P2["ExtraData"]["Face"], HumanCFrame * CFrame.new(0, -BEATRICE_SIZE.y/2 + 0.3/2 + 0.05/2, BEATRICE_SIZE.x/2 - .08/2 + 10**-3) * CFrame.AngleZ(vp.pi))
+    CFrameBox(P2["ExtraData"]["Face"], HumanCFrame * CFrame.new(0, -BEATRICE_SIZE.y/2 + 0.3/2 + 0.05/2, BEATRICE_SIZE.x/2 - .08/2 + 10**-2) * CFrame.AngleZ(vp.pi))
 
-#P2 = None
+    ArmHeightCFrame = HumanCFrame * CFrame.new(0,BEATRICE_ARM_OFFSET,0)
+    SwingHeightCFrame = P1["CFrame"] * CFrame.new(0,SWING_ARM_ATTACHMENT + add_l,0)
 
-add_l = BEATRICE_SIZE.x/2 + SWING_SIZE.y/2
+    Arm1StartPos = (ArmHeightCFrame * CFrame.new(-BEATRICE_SIZE.x/2,0,0)).Position
+    Arm1EndPos = (SwingHeightCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, +.05)).Position
+
+    Arm2StartPos = (ArmHeightCFrame * CFrame.new(BEATRICE_SIZE.x/2,0,0)).Position
+    Arm2EndPos = (SwingHeightCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, +.05)).Position
+
+    ArmLength = vp.mag(Arm1EndPos - Arm1StartPos)
+
+    P2["ExtraData"]["Arms"][0].length = ArmLength
+    P2["ExtraData"]["Arms"][1].length = ArmLength
+
+    CFrameBox(P2["ExtraData"]["Arms"][0], CFrame.lookAt(Arm1StartPos, Arm1EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
+    CFrameBox(P2["ExtraData"]["Arms"][1], CFrame.lookAt(Arm2StartPos, Arm2EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
 
 Swing = vp.box(color = Colors["Permisson"], size = SWING_SIZE)
 SwingPole1 = vp.box(color = Colors["Flint"], size = vp.vec(.1,SWING_LENGTH + add_l,.1))
@@ -293,8 +251,10 @@ SwingPole2 = vp.box(color = Colors["Flint"], size = vp.vec(.1,SWING_LENGTH + add
 
 Hooman = vp.box(color = Colors["Br. yellowish green"], size = BEATRICE_SIZE)
 HoomanFace = vp.box(color = vp.color.white, size = vp.vec(.08,.3,.3), texture = "BeatriceEvil.png")
+Arm1 = vp.box(color = Colors["Br. yellowish green"], size = vp.vec(1,1,1)*0.12)
+Arm2 = vp.box(color = Colors["Br. yellowish green"], size = vp.vec(1,1,1)*0.12)
 
-INITIAL_ANGLE = 1
+INITIAL_ANGLE = 0
 
 P1 = {
     "a": vp.vec(0,0,0),
@@ -306,15 +266,15 @@ P1 = {
     "m" : SWING_MASS,
     "I" : SWING_INERTIA,
     "obj": Swing,
+    "Forces" : vp.vec(0,0,0),
+    "MomentForces" : vp.vec(0,0,0),
     "CFrame" : CFrame.new(0,0,0),
-    "force_func": P1_force_func,
-    "pos_func": P1_pos_func,
     "ExtraData": {
         "Poles": [SwingPole1, SwingPole2]
     }
 }
 
-INITIAL_ANGLE = 2
+INITIAL_ANGLE = vp.pi*0.6
 
 P2 = {
     "a": vp.vec(0,0,0),
@@ -326,15 +286,56 @@ P2 = {
     "m" : BEATRICE_MASS,
     "I" : BEATRICE_INERTIA,
     "obj": Hooman,
+    "Forces" : vp.vec(0,0,0),
+    "MomentForces" : vp.vec(0,0,0),
     "CFrame" : CFrame.new(0,0,0),
-    "force_func": P2_force_func,
-    "pos_func": P2_pos_func,
     "ExtraData": {
-        "Face": HoomanFace
+        "Face": HoomanFace,
+        "Arms": [Arm1, Arm2]
     }
 }
 
+# Running these to update "CFrame"
+P1_pos_func()
+P2_pos_func()
+
+HingeObj = {
+    "a": vp.vec(0,0,0),
+    "v": vp.vec(0,0,0),
+    "x": HingeCFrame.Position,
+    "r_a": 0,
+    "r_v": 0,
+    "r_x": 0,
+    "m" : 0,
+    "I" : 0,
+    "obj": None,
+    "Forces" : vp.vec(0,0,0),
+    "MomentForces" : vp.vec(0,0,0),
+    "CFrame" : HingeCFrame,
+    "ExtraData": {}
+}
+
 objs = [P1, P2]
+
+ForceFunctions = [
+    # Gravity
+    lambda: CalculateGravity(P1),
+    lambda: CalculateGravity(P2),
+
+    # AirResistance
+    lambda: CalculateAirResistance(P1),
+    lambda: CalculateAirResistance(P2),
+
+    # Springs
+    lambda: CalculateSpringForceOnObjs(P1, HingeObj, CFrame.new(0,(SWING_LENGTH+add_l),0), CFrame.new(0,0,0), K, DAMPNING, 0),
+    lambda: CalculateSpringForceOnObjs(P1, P2, CFrame.new(0,0,0), CFrame.new(0,(BEATRICE_ROT_OFFSET),0), K, DAMPNING, 0),
+    lambda: CalculateSpringForceOnObjs(P1, P2, CFrame.new(0,SWING_ARM_ATTACHMENT,0), CFrame.new(0,(BEATRICE_ARM_OFFSET),0), ARM_SPRING_K, ARM_SPRING_DAMPNING, TargetArmLength),
+]
+
+PositionFunctions = [
+    P1_pos_func,
+    P2_pos_func,
+]
 
 # // Events & UI
 
@@ -350,7 +351,34 @@ vp.button(text = "<b>Exit</b>", pos = vp.scene.title_anchor, bind = Exit)
 
 # Label
 
-TextLabel = vp.wtext(text="")
+TextLabel = vp.wtext(text="", pos = vp.scene.title_anchor)
+
+ArmLengthLabel = vp.wtext(text = "ArmLength: " + str(TargetArmLength))
+
+def ArmLenght(event):
+    global TargetArmLength
+    TargetArmLength = event.value
+    ArmLengthLabel.text = "ArmLength: " + str(TargetArmLength)
+
+vp.slider(bind = ArmLenght, max = 1, min = 0, step = 0.01, value = TargetArmLength)
+
+GravityLabel = vp.wtext(text = "Gravity: 1g")
+
+def GravityModifier(event):
+    global g
+    g = vp.vec(0,-9.81,0)*event.value
+    GravityLabel.text = "Gravity: " + str(event.value) + "g"
+
+vp.slider(bind = GravityModifier, max = 3, min = 0, step = 0.1, value = 1)
+
+AirResistanceLabel = vp.wtext(text = "Air Resistance: " + str(AirResistance))
+
+def AirResistanceModifier(event):
+    global AirResistance
+    AirResistance = event.value
+    AirResistanceLabel.text = "Air Resistance: " + str(AirResistance)
+
+vp.slider(bind = AirResistanceModifier, max = 1000, min = 0, step = 1, value = AirResistance)
 
 # Loop variables
 sim_dt = 0
@@ -362,33 +390,30 @@ while Running:
 
     start_tick = vp.clock()
 
-    # Calculate acceleration
-    Forces = [0] * len(objs)
-    MomentForces = [0] * len(objs)
-    for i, v in enumerate(objs):
-        Forces[i], MomentForces[i] = v["force_func"](v)
+    # Force calculations
+    for func in ForceFunctions:
+        func()
 
-    # Apply the acceleration to velocity and position
+    # Apply the effects of the force
     for i, v in enumerate(objs):
-        v["a"] = Forces[i]/v["m"]
+        v["a"] = v["Forces"]/v["m"]
         v["v"] += v["a"]*dt
         v["x"] += v["v"]*dt
 
-        v["r_a"] = MomentForces[i]/v["I"]
+        v["r_a"] = v["MomentForces"].x/v["I"]
         v["r_v"] += v["r_a"]*dt
         v["r_x"] += v["r_v"]*dt
 
-    # Update the object's CFrames
-    for i, v in enumerate(objs):
-        v["pos_func"](v)
+        v["Forces"] = vp.vec(0,0,0)
+        v["MomentForces"] = vp.vec(0,0,0)
+
+    # Reposition objects
+    for func in PositionFunctions:
+        func()
 
     vp.rate(SIM_RATE)
 
-    #MiscAnimation()
-
     t = step*dt
-
-    #PlotGraph(t)
 
     # Debug labels
 
@@ -397,7 +422,7 @@ while Running:
     load_string = FormatNumber((sim_dt/dt)*100, 2) + "% load"
 
     # Tab char in between each one
-    TextLabel.text = "\u0009".join([sim_time,ms_str,load_string])
+    TextLabel.text = "\u0009" + "\u0009".join([sim_time,ms_str,load_string])
 
     # Debug calculations are included in the sim_dt
     sim_dt = vp.clock() - start_tick
