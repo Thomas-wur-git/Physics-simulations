@@ -7,6 +7,9 @@ vp.scene.background = BackgroundColor
 
 #vp.canvas.get_selected().align = "left"
 
+vp.distant_light(direction = vp.vec(0, 1, 0), color = vp.vec(1.0, 0.9, 0.5)*0.8)
+#vp.scene.ambien = vp.color.white*0.6
+
 # // Utils //
 
 Colors = {
@@ -30,6 +33,15 @@ def CFrameBox(box, CFrame):
 
     box.up = CFrame.YVector * box.height
     box.axis = -CFrame.ZVector * box.length
+
+Ids = {}
+def PrintAtAReasonablePace(Id, *args):
+    LastPrint = Ids.get(Id, 0)
+    if LastPrint + 1 > vp.clock():
+        return
+    
+    Ids[Id] = vp.clock()
+    print(args)
 
 def MatrixMul(Matrix1, Matrix2):
     Matrix = []
@@ -134,35 +146,39 @@ class CFrame:
 # // Constants
 
 g = vp.vec(0,-9.81,0)
-AirResistance = 50 # Air resistance
+AirResistance = .5 # Air resistance
 TargetArmLength = .45
 
 K = 80000 # Spring constant links between objects
 DAMPNING = 100 # Spring dampning, to stabilize the simulation
 
 SIM_RATE = 240*4 # hz
+SLOWDOWN_MOD = 1 # Slowing down the simulation for debuging resons
 
 SWING_SIZE = vp.vec(.5,.1,.9)
 
+# Inertia for a rectangular prism:
+# https://www.physicsblog.in/2025/01/moment-of-inertia-of-rectangle-prism.html
+
 SWING_LENGTH = 2.5
-SWING_MASS = 5
-SWING_INERTIA = SWING_MASS * SWING_LENGTH**2 # I around the center of mass? idk TODO - sus
+SWING_MASS = 5 # Arbitrairy value
+SWING_INERTIA = 5 # I around the center of mass? I think that's what it should be
 
 BEATRICE_SIZE = vp.vec(0.2, 1.55, 0.35)
 
 BEATRICE_ROT_OFFSET = 0.3 # Distance from the seat to the center of mass of BEATRICE
-BEATRICE_INERTIA = 40 # Moment of inertia of BEATRICE (need real mesurments)
 BEATRICE_MASS = 46.72
+BEATRICE_INERTIA = 30  # Moment of inertia of BEATRICE 
 
 BEATRICE_ARM_OFFSET = -0.35
 SWING_ARM_ATTACHMENT = 0.5
-ARM_SPRING_K = 2000
-ARM_SPRING_DAMPNING = 10
+ARM_SPRING_K = 3000
+ARM_SPRING_DAMPNING = 800
 
 # // Force functions
 
 # Calculates the force between two points, from 2 objects
-def CalculateSpringForceOnObjs(obj1, obj2, Attachment1Offset, Attachment2Offset, K, Dampning, RestLength):
+def CalculateSpringForceOnObjs(obj1, obj2, Attachment1Offset, Attachment2Offset, K, D, RestLength):
 
     # // Spring force
 
@@ -178,15 +194,15 @@ def CalculateSpringForceOnObjs(obj1, obj2, Attachment1Offset, Attachment2Offset,
 
     # // Dampning Forces
 
-    Attachment1Velocity = obj1["v"] -obj1["CFrame"].ZVector*vp.mag(Attachment1Offset.Position)*obj1["r_v"]
-    Attachment2Velocity = obj2["v"] -obj2["CFrame"].ZVector*vp.mag(Attachment2Offset.Position)*obj2["r_v"]
+    Attachment1Velocity = obj1["v"] - vp.cross(obj1["r_v"], (obj1["CFrame"] * Attachment1Offset).Position - obj1["CFrame"].Position)
+    Attachment2Velocity = obj2["v"] - vp.cross(obj2["r_v"], (obj2["CFrame"] * Attachment2Offset).Position - obj2["CFrame"].Position)
 
     # Velocity of Attachment1 relative to Attachment2
     VelocityVector = Attachment1Velocity - Attachment2Velocity
     ProjVelocityVector = vp.proj(VelocityVector, DistanceVector)
 
     # Force on attachment 1 (equal and opposite for attachment 2)
-    DampningForce = - ProjVelocityVector*Dampning
+    DampningForce = - ProjVelocityVector*D
 
     # // Applying the forces
 
@@ -199,13 +215,16 @@ def CalculateSpringForceOnObjs(obj1, obj2, Attachment1Offset, Attachment2Offset,
     obj2["MomentForces"] += vp.cross(obj2["CFrame"].Position - Attachment2Pos, -Force)
 
 def CalculateAirResistance(obj):
-    obj["Forces"] -= obj["v"]*AirResistance
+    # Does not consider angular speed, cuz that would probably be a pain
+    obj["Forces"] -= obj["v"]*vp.mag(obj["v"])*AirResistance
 
 def CalculateGravity(obj):
     obj["Forces"] += obj["m"]*g
 
 # // Coordinates
 
+# add_l is a visual offset to the swing to make the green blob on top of the swing
+# but with the springs, there is some sag, and so the green bloc is still not quite on the swing...
 add_l = BEATRICE_SIZE.x/2 + SWING_SIZE.y/2
 
 HingeCFrame = CFrame.new(0, 2, 0)
@@ -260,8 +279,8 @@ P1 = {
     "a": vp.vec(0,0,0),
     "v": vp.vec(0,0,0),
     "x": HingeCFrame.Position + vp.vec(0,-SWING_LENGTH*vp.cos(INITIAL_ANGLE),SWING_LENGTH*vp.sin(INITIAL_ANGLE)),
-    "r_a": 0,
-    "r_v": 0,
+    "r_a": vp.vec(0,0,0),
+    "r_v": vp.vec(0,0,0),
     "r_x": INITIAL_ANGLE,
     "m" : SWING_MASS,
     "I" : SWING_INERTIA,
@@ -280,8 +299,8 @@ P2 = {
     "a": vp.vec(0,0,0),
     "v": vp.vec(0,0,0),
     "x": P1["x"] + vp.vec(0,-BEATRICE_ROT_OFFSET*vp.cos(INITIAL_ANGLE),BEATRICE_ROT_OFFSET*vp.sin(INITIAL_ANGLE)),
-    "r_a": 0,
-    "r_v": 0,
+    "r_a": vp.vec(0,0,0),
+    "r_v": vp.vec(0,0,0),
     "r_x": INITIAL_ANGLE,
     "m" : BEATRICE_MASS,
     "I" : BEATRICE_INERTIA,
@@ -303,8 +322,8 @@ HingeObj = {
     "a": vp.vec(0,0,0),
     "v": vp.vec(0,0,0),
     "x": HingeCFrame.Position,
-    "r_a": 0,
-    "r_v": 0,
+    "r_a": vp.vec(0,0,0),
+    "r_v": vp.vec(0,0,0),
     "r_x": 0,
     "m" : 0,
     "I" : 0,
@@ -371,14 +390,14 @@ def GravityModifier(event):
 
 vp.slider(bind = GravityModifier, max = 3, min = 0, step = 0.1, value = 1)
 
-AirResistanceLabel = vp.wtext(text = "Résistance de l'air: " + FormatNumber(AirResistance,0))
+AirResistanceLabel = vp.wtext(text = "Résistance de l'air: " + FormatNumber(AirResistance,1))
 
 def AirResistanceModifier(event):
     global AirResistance
     AirResistance = event.value
-    AirResistanceLabel.text = "Résistance de l'air: " + FormatNumber(AirResistance,0)
+    AirResistanceLabel.text = "Résistance de l'air: " + FormatNumber(AirResistance,1)
 
-vp.slider(bind = AirResistanceModifier, max = 2000, min = 0, step = 1, value = AirResistance)
+vp.slider(bind = AirResistanceModifier, max = 100, min = 0, step = 0.1, value = AirResistance)
 
 # Loop variables
 sim_dt = 0
@@ -400,9 +419,9 @@ while Running:
         v["v"] += v["a"]*dt
         v["x"] += v["v"]*dt
 
-        v["r_a"] = v["MomentForces"].x/v["I"]
+        v["r_a"] = v["MomentForces"]/v["I"]
         v["r_v"] += v["r_a"]*dt
-        v["r_x"] += v["r_v"]*dt
+        v["r_x"] += v["r_v"].x*dt # TODO - Make this a vector as well maybe
 
         v["Forces"] = vp.vec(0,0,0)
         v["MomentForces"] = vp.vec(0,0,0)
@@ -411,7 +430,7 @@ while Running:
     for func in PositionFunctions:
         func()
 
-    vp.rate(SIM_RATE)
+    vp.rate(SIM_RATE/SLOWDOWN_MOD)
 
     t = step*dt
 
@@ -421,8 +440,7 @@ while Running:
     ms_str = FormatNumber(sim_dt*1000, 3) + " ms"
     load_string = FormatNumber((sim_dt/dt)*100, 2) + "% load"
 
-    # Tab char in between each one
-    TextLabel.text = "\u0009" + "\u0009".join([sim_time,ms_str,load_string])
+    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string])
 
     # Debug calculations are included in the sim_dt
     sim_dt = vp.clock() - start_tick
