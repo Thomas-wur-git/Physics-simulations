@@ -145,15 +145,16 @@ class CFrame:
 
 # // Constants
 
+FPS = 60
+SIM_RATE = FPS*12 # Should be a multiple of FPS
+SLOWDOWN_MOD = 1 # Slowing down the simulation for debuging resons
+
 g = vp.vec(0,-9.81,0)
 AirResistance = .5 # Air resistance
 TargetArmLength = .45
 
 K = 80000 # Spring constant links between objects
 DAMPNING = 100 # Spring dampning, to stabilize the simulation
-
-SIM_RATE = 240*4 # hz
-SLOWDOWN_MOD = 1 # Slowing down the simulation for debuging resons
 
 SWING_SIZE = vp.vec(.5,.1,.9)
 
@@ -162,7 +163,7 @@ SWING_SIZE = vp.vec(.5,.1,.9)
 
 SWING_LENGTH = 2.5
 SWING_MASS = 5 # Arbitrairy value
-SWING_INERTIA = 5 # I around the center of mass? I think that's what it should be
+SWING_INERTIA = 5 # I around the center of mass? I think that's what it should be. Unstable if too low
 
 BEATRICE_SIZE = vp.vec(0.2, 1.55, 0.35)
 
@@ -229,40 +230,42 @@ add_l = BEATRICE_SIZE.x/2 + SWING_SIZE.y/2
 
 HingeCFrame = CFrame.new(0, 2, 0)
 
-def P1_pos_func():
+def P1_pos_func(MoveParts):
     RotCFrame = CFrame.new(P1["x"].x,P1["x"].y,P1["x"].z) * CFrame.AngleX(P1["r_x"])
     PoleCFrame = RotCFrame * CFrame.new(0,(SWING_LENGTH+add_l)/2,0)
 
     P1["CFrame"] = RotCFrame
 
-    CFrameBox(P1["obj"], RotCFrame)
-    CFrameBox(P1["ExtraData"]["Poles"][0], PoleCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, 0))
-    CFrameBox(P1["ExtraData"]["Poles"][1], PoleCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, 0))
+    if MoveParts:
+        CFrameBox(P1["obj"], RotCFrame)
+        CFrameBox(P1["ExtraData"]["Poles"][0], PoleCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, 0))
+        CFrameBox(P1["ExtraData"]["Poles"][1], PoleCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, 0))
 
-def P2_pos_func():
+def P2_pos_func(MoveParts):
     HumanCFrame = CFrame.new(P2["x"].x,P2["x"].y,P2["x"].z) * CFrame.AngleX(P2["r_x"])
 
     P2["CFrame"] = HumanCFrame
 
-    CFrameBox(P2["obj"], HumanCFrame)
-    CFrameBox(P2["ExtraData"]["Face"], HumanCFrame * CFrame.new(0, -BEATRICE_SIZE.y/2 + 0.3/2 + 0.05/2, BEATRICE_SIZE.x/2 - .08/2 + 10**-2) * CFrame.AngleZ(vp.pi))
+    if MoveParts:
+        CFrameBox(P2["obj"], HumanCFrame)
+        CFrameBox(P2["ExtraData"]["Face"], HumanCFrame * CFrame.new(0, -BEATRICE_SIZE.y/2 + 0.3/2 + 0.05/2, BEATRICE_SIZE.x/2 - .08/2 + 10**-2) * CFrame.AngleZ(vp.pi))
 
-    ArmHeightCFrame = HumanCFrame * CFrame.new(0,BEATRICE_ARM_OFFSET,0)
-    SwingHeightCFrame = P1["CFrame"] * CFrame.new(0,SWING_ARM_ATTACHMENT + add_l,0)
+        ArmHeightCFrame = HumanCFrame * CFrame.new(0,BEATRICE_ARM_OFFSET,0)
+        SwingHeightCFrame = P1["CFrame"] * CFrame.new(0,SWING_ARM_ATTACHMENT + add_l,0)
 
-    Arm1StartPos = (ArmHeightCFrame * CFrame.new(-BEATRICE_SIZE.x/2,0,0)).Position
-    Arm1EndPos = (SwingHeightCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, +.05)).Position
+        Arm1StartPos = (ArmHeightCFrame * CFrame.new(-BEATRICE_SIZE.x/2,0,0)).Position
+        Arm1EndPos = (SwingHeightCFrame * CFrame.new(-SWING_SIZE.z/2 + .1, 0, +.05)).Position
 
-    Arm2StartPos = (ArmHeightCFrame * CFrame.new(BEATRICE_SIZE.x/2,0,0)).Position
-    Arm2EndPos = (SwingHeightCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, +.05)).Position
+        Arm2StartPos = (ArmHeightCFrame * CFrame.new(BEATRICE_SIZE.x/2,0,0)).Position
+        Arm2EndPos = (SwingHeightCFrame * CFrame.new(SWING_SIZE.z/2 - .1, 0, +.05)).Position
 
-    ArmLength = vp.mag(Arm1EndPos - Arm1StartPos)
+        ArmLength = vp.mag(Arm1EndPos - Arm1StartPos)
 
-    P2["ExtraData"]["Arms"][0].length = ArmLength
-    P2["ExtraData"]["Arms"][1].length = ArmLength
+        P2["ExtraData"]["Arms"][0].length = ArmLength
+        P2["ExtraData"]["Arms"][1].length = ArmLength
 
-    CFrameBox(P2["ExtraData"]["Arms"][0], CFrame.lookAt(Arm1StartPos, Arm1EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
-    CFrameBox(P2["ExtraData"]["Arms"][1], CFrame.lookAt(Arm2StartPos, Arm2EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
+        CFrameBox(P2["ExtraData"]["Arms"][0], CFrame.lookAt(Arm1StartPos, Arm1EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
+        CFrameBox(P2["ExtraData"]["Arms"][1], CFrame.lookAt(Arm2StartPos, Arm2EndPos, vp.vec(0,1,0)) * CFrame.new(0,0,ArmLength/2))
 
 Swing = vp.box(color = Colors["Permisson"], size = SWING_SIZE)
 SwingPole1 = vp.box(color = Colors["Flint"], size = vp.vec(.1,SWING_LENGTH + add_l,.1))
@@ -315,8 +318,8 @@ P2 = {
 }
 
 # Running these to update "CFrame"
-P1_pos_func()
-P2_pos_func()
+P1_pos_func(True)
+P2_pos_func(True)
 
 HingeObj = {
     "a": vp.vec(0,0,0),
@@ -355,6 +358,35 @@ PositionFunctions = [
     P1_pos_func,
     P2_pos_func,
 ]
+
+# // Oscillations per second counter
+
+ThresoldSpeed = 0.1
+Debounce = 0.5
+
+TimestampStart = 0
+Timestamps = [0,0,0]
+
+# Number of frames. This is decreased until it hits 0, when it isn't stopped
+IsStopped = 0
+IsAtThreshold = False
+
+def AnalyzeOscillations(t):
+    global Threshold, TimestampStart, IsStopped, IsAtThreshold
+
+    IsAtThreshold = False
+
+    if vp.mag(P1["v"]) < ThresoldSpeed:
+        IsStopped = vp.floor(SIM_RATE*Debounce)
+        IsAtThreshold = True
+
+    elif IsStopped > 0:
+
+        IsStopped -= 1
+        if IsStopped == 0:
+            Timestamps.append(t)
+            Timestamps.pop(0)
+
 
 # // Events & UI
 
@@ -401,46 +433,57 @@ vp.slider(bind = AirResistanceModifier, max = 100, min = 0, step = 0.1, value = 
 
 # Loop variables
 sim_dt = 0
-dt = 1/SIM_RATE
 step = 0
 
+n = SIM_RATE//60
+dt = 1/(60*n)
+
 while Running:
-    step += 1
+
+    vp.rate(FPS)
 
     start_tick = vp.clock()
 
-    # Force calculations
-    for func in ForceFunctions:
-        func()
+    for i in range(n):
 
-    # Apply the effects of the force
-    for i, v in enumerate(objs):
-        v["a"] = v["Forces"]/v["m"]
-        v["v"] += v["a"]*dt
-        v["x"] += v["v"]*dt
+        step += 1
 
-        v["r_a"] = v["MomentForces"]/v["I"]
-        v["r_v"] += v["r_a"]*dt
-        v["r_x"] += v["r_v"].x*dt # TODO - Make this a vector as well maybe
+        # Force calculations
+        for func in ForceFunctions:
+            func()
 
-        v["Forces"] = vp.vec(0,0,0)
-        v["MomentForces"] = vp.vec(0,0,0)
+        # Apply the effects of the force
+        for i, v in enumerate(objs):
+            v["a"] = v["Forces"]/v["m"]
+            v["v"] += v["a"]*dt
+            v["x"] += v["v"]*dt
 
-    # Reposition objects
-    for func in PositionFunctions:
-        func()
+            v["r_a"] = v["MomentForces"]/v["I"]
+            v["r_v"] += v["r_a"]*dt
+            v["r_x"] += v["r_v"].x*dt # TODO - Make this a vector as well maybe
 
-    vp.rate(SIM_RATE/SLOWDOWN_MOD)
+            v["Forces"] = vp.vec(0,0,0)
+            v["MomentForces"] = vp.vec(0,0,0)
 
-    t = step*dt
+        # Reposition objects
+        for func in PositionFunctions:
+            func(False)
+
+        AnalyzeOscillations(step*dt)
 
     # Debug labels
 
-    sim_time = FormatNumber(t, 3) + " secondes"
-    ms_str = FormatNumber(sim_dt*1000, 3) + " ms"
-    load_string = FormatNumber((sim_dt/dt)*100, 2) + "% load"
+    # Reposition objects
+    for func in PositionFunctions:
+        func(True)
 
-    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string])
+    sim_time = FormatNumber(step*dt, 3) + " secondes"
+    ms_str = FormatNumber(sim_dt*1000, 3) + " ms"
+    load_string = FormatNumber((sim_dt*FPS)*100, 2) + "% load"
+
+    sec_per_osc = ("*" if IsAtThreshold else " ") + FormatNumber(Timestamps[-1] - Timestamps[-3], 2) + " sec/osc"
+
+    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string,sec_per_osc])
 
     # Debug calculations are included in the sim_dt
     sim_dt = vp.clock() - start_tick
