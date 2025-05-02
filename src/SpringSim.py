@@ -2,13 +2,10 @@
 
 import vpython as vp
 
-BackgroundColor = vp.vec(241/255,242/255,244/255)
-vp.scene.background = BackgroundColor
-
-#vp.canvas.get_selected().align = "left"
-
 vp.distant_light(direction = vp.vec(0, 1, 0), color = vp.vec(1.0, 0.9, 0.5)*0.8)
-#vp.scene.ambien = vp.color.white*0.6
+
+#vp.canvas.get_selected().width = 1920 * (159/128) - 4
+#vp.canvas.get_selected().height = 1080 * (159/128) - 53
 
 # // Utils //
 
@@ -19,6 +16,9 @@ Colors = {
     "Baby blue": vp.vec(0.596078, 0.760784, 0.858824),
     "Flint": vp.vec(0.411765, 0.4, 0.360784),
 }
+
+BackgroundColor = vp.vec(209, 227, 237)/255 # vp.vec(241/255,242/255,244/255)*0.8
+vp.scene.background = BackgroundColor # Colors["Baby blue"]*1.2
 
 def FormatNumber(Number, Digits):
     String = str(round(Number, Digits))
@@ -152,6 +152,7 @@ SLOWDOWN_MOD = 1 # Slowing down the simulation for debuging resons
 g = vp.vec(0,-9.81,0)
 AirResistance = .5 # Air resistance
 TargetArmLength = .45
+ArmDamping = 800
 
 K = 80000 # Spring constant links between objects
 DAMPNING = 100 # Spring dampning, to stabilize the simulation
@@ -174,7 +175,6 @@ BEATRICE_INERTIA = 30  # Moment of inertia of BEATRICE
 BEATRICE_ARM_OFFSET = -0.35
 SWING_ARM_ATTACHMENT = 0.5
 ARM_SPRING_K = 3000
-ARM_SPRING_DAMPNING = 800
 
 # // Force functions
 
@@ -351,7 +351,7 @@ ForceFunctions = [
     # Springs
     lambda: CalculateSpringForceOnObjs(P1, HingeObj, CFrame.new(0,(SWING_LENGTH+add_l),0), CFrame.new(0,0,0), K, DAMPNING, 0),
     lambda: CalculateSpringForceOnObjs(P1, P2, CFrame.new(0,0,0), CFrame.new(0,(BEATRICE_ROT_OFFSET),0), K, DAMPNING, 0),
-    lambda: CalculateSpringForceOnObjs(P1, P2, CFrame.new(0,SWING_ARM_ATTACHMENT,0), CFrame.new(0,(BEATRICE_ARM_OFFSET),0), ARM_SPRING_K, ARM_SPRING_DAMPNING, TargetArmLength),
+    lambda: CalculateSpringForceOnObjs(P1, P2, CFrame.new(0,SWING_ARM_ATTACHMENT,0), CFrame.new(0,(BEATRICE_ARM_OFFSET),0), ARM_SPRING_K, ArmDamping, TargetArmLength),
 ]
 
 PositionFunctions = [
@@ -413,6 +413,15 @@ def ArmLenght(event):
 
 vp.slider(bind = ArmLenght, max = 1, min = 0, step = 0.01, value = TargetArmLength)
 
+ArmDampningLabel = vp.wtext(text = "Amortissement des bras: " + FormatNumber(ArmDamping,0))
+
+def ArmDampning(event):
+    global ArmDamping
+    ArmDamping = event.value
+    ArmDampningLabel.text = "Amortissement des bras: " + FormatNumber(ArmDamping,0)
+
+vp.slider(bind = ArmDampning, max = 1000, min = 0, step = 1, value = ArmDamping)
+
 GravityLabel = vp.wtext(text = "Gravité: 1.0g")
 
 def GravityModifier(event):
@@ -429,7 +438,7 @@ def AirResistanceModifier(event):
     AirResistance = event.value
     AirResistanceLabel.text = "Résistance de l'air: " + FormatNumber(AirResistance,1)
 
-vp.slider(bind = AirResistanceModifier, max = 100, min = 0, step = 0.1, value = AirResistance)
+vp.slider(bind = AirResistanceModifier, max = 500, min = 0, step = 0.1, value = AirResistance)
 
 # Loop variables
 sim_dt = 0
@@ -444,7 +453,11 @@ while Running:
 
     start_tick = vp.clock()
 
+    sum_mom_inertia = vp.vec(0,0,0)
+
     for i in range(n):
+
+        sum_mom_inertia = vp.vec(0,0,0)
 
         step += 1
 
@@ -461,6 +474,8 @@ while Running:
             v["r_a"] = v["MomentForces"]/v["I"]
             v["r_v"] += v["r_a"]*dt
             v["r_x"] += v["r_v"].x*dt # TODO - Make this a vector as well maybe
+
+            sum_mom_inertia += v["r_v"]*v["I"]
 
             v["Forces"] = vp.vec(0,0,0)
             v["MomentForces"] = vp.vec(0,0,0)
@@ -480,10 +495,10 @@ while Running:
     sim_time = FormatNumber(step*dt, 3) + " secondes"
     ms_str = FormatNumber(sim_dt*1000, 3) + " ms"
     load_string = FormatNumber((sim_dt*FPS)*100, 2) + "% load"
+    sec_per_osc = ("*" if IsAtThreshold else "  ") + FormatNumber(Timestamps[-1] - Timestamps[-3], 2) + " sec/osc"
+    sum_mom_inertia_str = "" # FormatNumber(sum_mom_inertia.x, 2) + " Somme moment d'inertie"
 
-    sec_per_osc = ("*" if IsAtThreshold else " ") + FormatNumber(Timestamps[-1] - Timestamps[-3], 2) + " sec/osc"
-
-    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string,sec_per_osc])
+    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string,sec_per_osc,sum_mom_inertia_str])
 
     # Debug calculations are included in the sim_dt
     sim_dt = vp.clock() - start_tick

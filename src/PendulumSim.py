@@ -2,10 +2,10 @@
 
 import vpython as vp
 
-BackgroundColor = vp.vec(241/255,242/255,244/255)
-vp.scene.background = BackgroundColor
+vp.distant_light(direction = vp.vec(0, 1, 0), color = vp.vec(1.0, 0.9, 0.5)*0.8)
 
-vp.canvas.get_selected().align = "left"
+#vp.canvas.get_selected().width = 1920 * (159/128) - 4
+#vp.canvas.get_selected().height = 1080 * (159/128) - 53
 
 # // Utils //
 
@@ -16,6 +16,9 @@ Colors = {
     "Baby blue": vp.vec(0.596078, 0.760784, 0.858824),
     "Flint": vp.vec(0.411765, 0.4, 0.360784),
 }
+
+BackgroundColor = vp.vec(209, 227, 237)/255 # vp.vec(241/255,242/255,244/255)*0.8
+vp.scene.background = BackgroundColor # Colors["Baby blue"]*1.2
 
 def FormatNumber(Number, Digits):
     String = str(round(Number, Digits))
@@ -121,7 +124,7 @@ class CFrame:
 
 # // Constants
 
-FRICTION = 0.05 # Air resistance or something, not very physically acurate
+FRICTION = 0 # Air resistance or something, not very physically acurate
 
 SIM_RATE = 240 # hz
 
@@ -139,7 +142,7 @@ MASS_BEATRICE = 46.72
 # Constants you SHALL NOT TOUCH
 
 BLOCK_OFF = -1/2 - SIZE_BEATRICE.y/2
-art_l = (I + MASS_BEATRICE*(r**2))/MASS_BEATRICE # TODO - r = 0 => art_l = 0??? - Artificial length, of an equivalent point mass system
+art_l = vp.sqrt((I + MASS_BEATRICE*(r**2))/MASS_BEATRICE) # TODO - r = 0 => art_l = 0??? - Artificial length, of an equivalent point mass system
 
 # // Coordinates
 
@@ -192,7 +195,7 @@ HoomanFace = vp.box(color = vp.color.white, size = vp.vec(.08,.3,.3), texture = 
 P1 = {
     "a": 0,
     "v": 0,
-    "x": 1,
+    "x": 0.7,
     "m" : 20,
     "obj": Swing,
     "upd_func": P1_upt_func,
@@ -231,7 +234,7 @@ vp.button(text = "<b>Exit</b>", pos = vp.scene.title_anchor, bind = Exit)
 
 # Label
 
-TextLabel = vp.wtext(text="")
+TextLabel = vp.wtext(text="", pos = vp.scene.title_anchor)
 
 # Loop variables
 sim_dt = 0
@@ -273,7 +276,7 @@ while Running:
     load_string = FormatNumber((sim_dt/dt)*100, 2) + "% load"
 
     # Tab char in between each one
-    TextLabel.text = "\u0009".join([sim_time,ms_str,load_string])
+    TextLabel.text = "  " + "  ".join([sim_time,ms_str,load_string])
 
     # Debug calculations are included in the sim_dt
     sim_dt = vp.clock() - start_tick
